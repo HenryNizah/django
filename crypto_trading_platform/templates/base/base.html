@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="{% block meta_description %}Secure cryptocurrency trading platform{% endblock %}">
+    <title>{% block title %}CryptoPlatform{% endblock %}</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'css/main.css' %}">
+    
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="{% url 'home' %}">
+                <i class="fas fa-coins"></i> CryptoPlatform
+            </a>
+            
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'market_data' %}">
+                            <i class="fas fa-chart-line"></i> Markets
+                        </a>
+                    </li>
+                    {% if user.is_authenticated %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'portfolio' %}">
+                            <i class="fas fa-wallet"></i> Portfolio
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'trading' %}">
+                            <i class="fas fa-exchange-alt"></i> Trade
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+                
+                <ul class="navbar-nav">
+                    {% if user.is_authenticated %}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-user"></i> {{ user.get_full_name|default:user.email }}
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{% url 'profile' %}">
+                                <i class="fas fa-user-cog"></i> Profile
+                            </a></li>
+                            <li><a class="dropdown-item" href="{% url 'security_settings' %}">
+                                <i class="fas fa-shield-alt"></i> Security
+                            </a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{% url 'account_logout' %}">
+                                <i class="fas fa-sign-out-alt"></i> Logout
+                            </a></li>
+                        </ul>
+                    </li>
+                    {% else %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'account_login' %}">
+                            <i class="fas fa-sign-in-alt"></i> Login
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'account_signup' %}">
+                            <i class="fas fa-user-plus"></i> Sign Up
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="container-fluid py-4">
+        {% if messages %}
+        <div class="row">
+            <div class="col-12">
+                {% for message in messages %}
+                <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+        
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-dark text-light py-4 mt-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-md-6">
+                    <h5><i class="fas fa-coins"></i> CryptoPlatform</h5>
+                    <p class="mb-0">Secure cryptocurrency trading platform</p>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <p class="mb-0">
+                        <a href="#" class="text-light me-3">Privacy Policy</a>
+                        <a href="#" class="text-light me-3">Terms of Service</a>
+                        <a href="#" class="text-light">Support</a>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- WebSocket Connection -->
+    <script>
+        // Global WebSocket connections
+        let marketDataSocket = null;
+        let portfolioSocket = null;
+        let tradingSocket = null;
+        
+        // Initialize WebSocket connections
+        function initializeWebSockets() {
+            // Market data WebSocket
+            if (window.location.protocol === 'https:') {
+                marketDataSocket = new WebSocket('wss://' + window.location.host + '/ws/market-data/');
+            } else {
+                marketDataSocket = new WebSocket('ws://' + window.location.host + '/ws/market-data/');
+            }
+            
+            marketDataSocket.onmessage = function(e) {
+                const data = JSON.parse(e.data);
+                if (data.type === 'market_data') {
+                    updateMarketData(data.data);
+                }
+            };
+            
+            {% if user.is_authenticated %}
+            // Portfolio WebSocket for authenticated users
+            if (window.location.protocol === 'https:') {
+                portfolioSocket = new WebSocket('wss://' + window.location.host + '/ws/portfolio/{{ user.id }}/');
+            } else {
+                portfolioSocket = new WebSocket('ws://' + window.location.host + '/ws/portfolio/{{ user.id }}/');
+            }
+            
+            portfolioSocket.onmessage = function(e) {
+                const data = JSON.parse(e.data);
+                if (data.type === 'portfolio_update' || data.type === 'portfolio_data') {
+                    updatePortfolioData(data.data);
+                }
+            };
+            {% endif %}
+        }
+        
+        // Update market data in the UI
+        function updateMarketData(data) {
+            // This function will be overridden in specific pages
+            console.log('Market data update:', data);
+        }
+        
+        // Update portfolio data in the UI
+        function updatePortfolioData(data) {
+            // This function will be overridden in specific pages
+            console.log('Portfolio data update:', data);
+        }
+        
+        // Initialize WebSockets when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeWebSockets();
+        });
+    </script>
+    
+    {% block extra_js %}{% endblock %}
+</body>
+</html>
+
